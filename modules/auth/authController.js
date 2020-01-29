@@ -3,39 +3,47 @@ const _ = require("lodash");
 
 const authController = {};
 
-// const sampleData = {
-//   user: {
-//     username: "sadsada",
-//     password: "sdsdsds",
-//     dob: new Date(),
-//     email: "sdsdsd"
-//   }
-// };
-
-authController.signup = (req, res) => {
+authController.signup = async (req, res, next) => {
   if (!_.isEmpty(req.body.user)) {
     const { username, password, email } = req.body.user;
-    const newUser = {
-      username,
-      password,
-      email
-    };
-    const user = new User(newUser);
-    user.save((err, doc) => {
-      res.send(doc.toJSON());
-    });
+    try {
+      const user = new User({
+        username,
+        password,
+        email
+      });
+      const token = await user.generateJwtToken();
+      user.token = token;
+      const newUser = await user.save();
+      if (user) {
+        res.send(newUser.toJSON());
+      }
+    } catch (err) {
+      next(err);
+    }
   }
 };
 
-authController.signin = (req, res) => {
+authController.signin = async (req, res, next) => {
   if (!_.isEmpty(req.body.user)) {
-    const { username } = req.body.user;
-    User.findOne({ username }, (err, user) => {
+    const { username, password } = req.body.user;
+    try {
+      const user = await User.findOne({ username });
+      if (!user) {
+        const error = new Error("No such username Found");
+        next(error);
+      }
+      if (!user.comparePassword(password)) {
+        res.status(500).send({ message: "Invalid Login Credentials" });
+      }
+      const token = user.generateJwtToken();
       res.send({
         user: user.toJSON(),
         message: "success"
       });
-    });
+    } catch (err) {
+      next(err);
+    }
   }
 };
 
